@@ -102,7 +102,7 @@
                 silver: new THREE.Color('#E5E4E2')
             },
             tree: { height: 10, radius: 3.8, chaosRadius: 8, needleCount: 2500, ornamentCount: 80 },
-            // Changed to portrait 9:16 aspect ratio
+            // Vertical 9:16 aspect ratio settings
             photos: { max: 8, frameWidth: 0.9, frameHeight: 1.6 }
         };
 
@@ -116,7 +116,7 @@
 
         // --- UTILS ---
         const createPlaceholder = (text) => {
-            // 9:16 Aspect Ratio
+            // 9:16 Aspect Ratio Canvas
             const width = 450;
             const height = 800;
             const canvas = document.createElement('canvas');
@@ -124,7 +124,7 @@
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             
-            // Gradient
+            // Gradient Background
             const gradient = ctx.createLinearGradient(0, 0, width, height);
             gradient.addColorStop(0, '#002211');
             gradient.addColorStop(1, '#004225');
@@ -337,7 +337,7 @@
 
         // Texture loader
         const textureLoader = new THREE.TextureLoader();
-        // Updated to use configured width/height
+        // Updated to use configured width/height (9:16)
         const photoFrameGeo = new THREE.BoxGeometry(CONFIG.photos.frameWidth, CONFIG.photos.frameHeight, 0.1);
         
         // Gold Frame Material: High metalness + Emissive to glow/shine
@@ -360,15 +360,14 @@
             const tex = textureLoader.load(url);
             tex.colorSpace = THREE.SRGBColorSpace;
             
-            // Photo Material:
-            // Use MeshBasicMaterial to preserve original colors.
-            // Set color to 0xbfbfbf (approx 0.75 intensity) to clamp max brightness below Bloom threshold (0.8).
+            // Photo Material
             const photoMat = new THREE.MeshBasicMaterial({ 
                 map: tex, 
                 color: 0xbfbfbf 
             });
             
-            // Apply materials: sides/back are gold, front is photo
+            // Apply materials: sides/back are gold, front is photo (index 4 for BoxGeometry if mapped correctly, but standard Box uses indices: right, left, top, bottom, front, back)
+            // Three.js BoxGeometry material indices: 0:right, 1:left, 2:top, 3:bottom, 4:front, 5:back
             const materials = [goldMat, goldMat, goldMat, goldMat, photoMat, goldMat];
 
             const mesh = new THREE.Mesh(photoFrameGeo, materials);
@@ -377,7 +376,7 @@
                 index: index, 
                 chaosPos: chaosP, 
                 slotPos: slot.pos,
-                slotRot: slot.rot,
+                slotRot: slot.rot, // Base rotation relative to tree
                 active: false 
             };
             
@@ -399,12 +398,13 @@
             updateUI();
         }
 
-        // Main Tree Group holds everything that rotates
+        // Main Tree Group holds foliage and ornaments (rotates continuously)
         const treeGroup = new THREE.Group();
         treeGroup.add(foliage);
         treeGroup.add(ornaments);
-        treeGroup.add(photoGroup);
         scene.add(treeGroup);
+        // Add Photos directly to scene to handle their rotation independently
+        scene.add(photoGroup);
 
         // --- POST PROCESSING ---
         const composer = new EffectComposer(renderer);
@@ -442,6 +442,13 @@
             }
         });
 
+        // --- HELPERS FOR ROTATION ---
+        const dummyObj = new THREE.Object3D();
+        const Y_AXIS = new THREE.Vector3(0, 1, 0);
+        const qRigid = new THREE.Quaternion();
+        const qBillboard = new THREE.Quaternion();
+        const qFinal = new THREE.Quaternion();
+
         // --- ANIMATION LOOP ---
         function animate() {
             requestAnimationFrame(animate);
@@ -455,23 +462,20 @@
             state.progress = THREE.MathUtils.lerp(state.progress, targetProgress, 0.02);
             foliageUniforms.uProgress.value = state.progress;
 
-            // Update Ornaments
+            // Always rotate the tree core (foliage/ornaments)
+            // Slower rotation in formed mode to be elegant, maybe same speed is fine
+            treeGroup.rotation.y += 0.002;
+
+            // Update Ornaments (move between chaos and target relative to treeGroup)
+            // Since ornaments are children of treeGroup, their "Target" is local.
             const isFormed = state.mode === 'FORMED';
             
             for (let i = 0; i < CONFIG.tree.ornamentCount; i++) {
                 const d = ornamentData[i];
-                
-                // Calculate interpolation factor with "weight"
-                // Heavier items (simulated by speed) move differently
-                // We use global progress but apply a power curve based on 'speed'
-                // If progress is near 0 or 1, we snap, otherwise we ease
-                
                 let t = state.progress;
-                // Add some variation based on ID
-                const noise = Math.sin(state.time + d.id) * 0.02; 
                 
+                // Interpolate position relative to tree center
                 const pos = new THREE.Vector3().lerpVectors(d.chaos, d.target, t);
-                
                 dummy.position.copy(pos);
                 
                 // Rotation
@@ -491,22 +495,45 @@
             ornaments.instanceMatrix.needsUpdate = true;
 
             // Update Photos
+            // Determine mix factor for rotation: 1.0 = Pure Billboard (Chaos), 0.7 = Hybrid (Formed)
+            // As we transition from Chaos (0) to Formed (1), mix goes from 1.0 to 0.7
+            const billboardFactor = THREE.MathUtils.lerp(1.0, 0.7, state.progress);
+
             state.photos.forEach(mesh => {
                 const ud = mesh.userData;
-                const targetPos = isFormed ? ud.slotPos : ud.chaosPos;
                 
-                // Position Lerp
+                // Calculate Target Position
+                // Chaos: Static chaos position
+                // Formed: Orbiting slot position
+                
+                // 1. Calculate Orbiting Slot Position in World Space
+                const rigidPos = ud.slotPos.clone().applyAxisAngle(Y_AXIS, treeGroup.rotation.y);
+                
+                // 2. Lerp Position
+                // If progress is 0 (Chaos), use chaosPos. If 1 (Formed), use rigidPos.
+                const targetPos = new THREE.Vector3().lerpVectors(ud.chaosPos, rigidPos, state.progress);
+                
+                // Apply Position
                 mesh.position.lerp(targetPos, 0.05);
                 
-                // Rotation Lerp
-                if (isFormed) {
-                    mesh.rotation.x = THREE.MathUtils.lerp(mesh.rotation.x, ud.slotRot.x, 0.05);
-                    mesh.rotation.y = THREE.MathUtils.lerp(mesh.rotation.y, ud.slotRot.y, 0.05);
-                    mesh.rotation.z = THREE.MathUtils.lerp(mesh.rotation.z, ud.slotRot.z, 0.05);
-                } else {
-                    mesh.rotation.y += 0.005;
-                    mesh.rotation.x += 0.005;
-                }
+                // Calculate Target Rotation
+                
+                // A. Billboard Rotation (Always face camera)
+                dummyObj.position.copy(mesh.position);
+                dummyObj.lookAt(camera.position);
+                qBillboard.copy(dummyObj.quaternion);
+
+                // B. Rigid Rotation (Face outward from tree center)
+                // Rigid World Rot = TreeRot * SlotBaseRot
+                qRigid.setFromEuler(ud.slotRot);
+                qRigid.premultiply(treeGroup.quaternion); // Apply tree rotation
+                
+                // C. Final Rotation (Slerp)
+                // Mix between Rigid and Billboard based on factor.
+                // Factor 1.0 (Chaos) => Pure Billboard.
+                // Factor 0.7 (Formed) => 70% Billboard, 30% Rigid.
+                // This allows tilt (up to ~54 deg) but prevents back-facing (>90 deg).
+                mesh.quaternion.slerpQuaternions(qRigid, qBillboard, billboardFactor);
 
                 // Scale Logic (Zoom)
                 const targetScale = ud.active ? 3.5 : 1.0;
@@ -514,11 +541,6 @@
                 const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1);
                 mesh.scale.setScalar(newScale);
             });
-
-            // Tree Rotation
-            if (isFormed && state.progress > 0.9) {
-                treeGroup.rotation.y += 0.002;
-            }
 
             // Render
             composer.render();
