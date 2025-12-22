@@ -55,7 +55,7 @@
     <!-- UI Overlay -->
     <div class="ui-layer">
         <!-- Header -->
-        <div class="p-6 flex flex-col items-center text-center mt-4">
+        <div class="p-6 flex flex-col items-center text-center mt-4 relative w-full pointer-events-auto">
             <h1 class="text-4xl md:text-6xl text-[#FFD700] font-luxury drop-shadow-[0_0_10px_rgba(255,215,0,0.8)] mb-2">
                 CHRISTMAS TREES
             </h1>
@@ -67,14 +67,14 @@
         <!-- Controls -->
         <div class="p-6 mb-4 flex flex-col items-center gap-4 pointer-events-auto w-full">
             <button id="toggle-mode-btn" class="btn-gold font-luxury font-bold py-3 px-10 rounded-sm text-sm md:text-base uppercase tracking-wider">
-                ASSEMBLE TREE
+                UNLEASH CHAOS
             </button>
 
             <div class="glass-panel p-2 rounded-lg flex items-center gap-3">
                 <button id="add-photo-btn" class="px-4 py-2 bg-[#004225] text-[#FFD700] border border-[#FFD700] rounded hover:bg-[#005c35] font-luxury text-xs md:text-sm transition-colors">
                     + PHOTO
                 </button>
-                <span id="photo-count" class="text-[#FFD700] font-bold font-luxury text-sm">3 / 8</span>
+                <span id="photo-count" class="text-[#FFD700] font-bold font-luxury text-sm">0 / 8</span>
                 <button id="remove-photo-btn" class="px-4 py-2 bg-[#8B0000] text-[#FFD700] border border-[#FFD700] rounded hover:bg-[#a00000] font-luxury text-xs md:text-sm transition-colors">
                     - REMOVE
                 </button>
@@ -108,43 +108,13 @@
 
         // --- STATE ---
         const state = {
-            mode: 'CHAOS', // 'CHAOS' | 'FORMED'
-            progress: 0,   // 0 = CHAOS, 1 = FORMED
+            mode: 'FORMED', // Start in FORMED state
+            progress: 1,    // Start fully formed
             photos: [],    // Array of mesh objects
             time: 0
         };
 
         // --- UTILS ---
-        const createPlaceholder = (text) => {
-            // 9:16 Aspect Ratio Canvas
-            const width = 450;
-            const height = 800;
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            
-            // Gradient Background
-            const gradient = ctx.createLinearGradient(0, 0, width, height);
-            gradient.addColorStop(0, '#002211');
-            gradient.addColorStop(1, '#004225');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, width, height);
-            
-            // Border
-            ctx.strokeStyle = '#FFD700';
-            ctx.lineWidth = 20;
-            ctx.strokeRect(0, 0, width, height);
-            
-            // Text
-            ctx.fillStyle = '#FFD700';
-            ctx.font = 'bold 60px serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(text, width / 2, height / 2);
-            return canvas.toDataURL();
-        };
-
         const getRandomSpherePoint = (radius) => {
             const u = Math.random();
             const v = Math.random();
@@ -237,7 +207,7 @@
 
         const foliageUniforms = {
             uTime: { value: 0 },
-            uProgress: { value: 0 },
+            uProgress: { value: 1.0 }, // Init at 1.0
             uColor1: { value: CONFIG.colors.emerald },
             uColor2: { value: CONFIG.colors.gold }
         };
@@ -310,8 +280,8 @@
                 speed: 0.5 + Math.random() * 0.5 // Different speeds
             });
             
-            // Initial Pos
-            dummy.position.copy(chaos);
+            // Initial Pos (Start formed)
+            dummy.position.copy(target);
             dummy.updateMatrix();
             ornaments.setMatrixAt(i, dummy.matrix);
         }
@@ -380,8 +350,8 @@
                 active: false 
             };
             
-            // Start at chaos
-            mesh.position.copy(chaosP);
+            // Start at slot (FORMED)
+            mesh.position.copy(slot.pos);
             
             photoGroup.add(mesh);
             state.photos.push(mesh);
@@ -447,7 +417,6 @@
         const Y_AXIS = new THREE.Vector3(0, 1, 0);
         const qRigid = new THREE.Quaternion();
         const qBillboard = new THREE.Quaternion();
-        const qFinal = new THREE.Quaternion();
 
         // --- ANIMATION LOOP ---
         function animate() {
@@ -463,7 +432,6 @@
             foliageUniforms.uProgress.value = state.progress;
 
             // Always rotate the tree core (foliage/ornaments)
-            // Slower rotation in formed mode to be elegant, maybe same speed is fine
             treeGroup.rotation.y += 0.002;
 
             // Update Ornaments (move between chaos and target relative to treeGroup)
@@ -496,7 +464,6 @@
 
             // Update Photos
             // Determine mix factor for rotation: 1.0 = Pure Billboard (Chaos), 0.7 = Hybrid (Formed)
-            // As we transition from Chaos (0) to Formed (1), mix goes from 1.0 to 0.7
             const billboardFactor = THREE.MathUtils.lerp(1.0, 0.7, state.progress);
 
             state.photos.forEach(mesh => {
@@ -510,7 +477,6 @@
                 const rigidPos = ud.slotPos.clone().applyAxisAngle(Y_AXIS, treeGroup.rotation.y);
                 
                 // 2. Lerp Position
-                // If progress is 0 (Chaos), use chaosPos. If 1 (Formed), use rigidPos.
                 const targetPos = new THREE.Vector3().lerpVectors(ud.chaosPos, rigidPos, state.progress);
                 
                 // Apply Position
@@ -529,10 +495,6 @@
                 qRigid.premultiply(treeGroup.quaternion); // Apply tree rotation
                 
                 // C. Final Rotation (Slerp)
-                // Mix between Rigid and Billboard based on factor.
-                // Factor 1.0 (Chaos) => Pure Billboard.
-                // Factor 0.7 (Formed) => 70% Billboard, 30% Rigid.
-                // This allows tilt (up to ~54 deg) but prevents back-facing (>90 deg).
                 mesh.quaternion.slerpQuaternions(qRigid, qBillboard, billboardFactor);
 
                 // Scale Logic (Zoom)
@@ -579,11 +541,7 @@
         }
 
         // --- INIT ---
-        // Add initial placeholders
-        addPhoto(createPlaceholder('FAMILY'));
-        addPhoto(createPlaceholder('FRIENDS'));
-        addPhoto(createPlaceholder('LOVE'));
-
+        
         // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
