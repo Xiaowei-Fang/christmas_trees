@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Grand Luxury Interactive Christmas Tree</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #001a0f; touch-action: none; }
+        #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        /* Luxury Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #002211; }
+        ::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 3px; }
+
+        .font-luxury { font-family: 'Cinzel', serif; }
+        .font-body { font-family: 'Playfair Display', serif; }
+        .lux-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        
+        .ui-layer { position: absolute; z-index: 10; pointer-events: none; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+        .pointer-events-auto { pointer-events: auto; }
+        
+        .btn-gold {
+            background: linear-gradient(to bottom, #FFD700, #B8860B);
+            color: #001a0f;
+            border: 2px solid #FFF8DC;
+            box-shadow: 0 0 15px rgba(255,215,0,0.5);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn-gold:active { transform: scale(0.95); }
+        
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 215, 0, 0.3);
+        }
+    </style>
+    <!-- Import Three.js via ES Modules -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <!-- UI Overlay -->
+    <div class="ui-layer">
+        <!-- Header -->
+        <div class="p-6 flex flex-col items-center text-center mt-4">
+            <h1 class="text-4xl md:text-6xl text-[#FFD700] font-luxury drop-shadow-[0_0_10px_rgba(255,215,0,0.8)] mb-2">
+                CHRISTMAS TREES
+            </h1>
+            <p class="text-[#E5E4E2] font-body text-xs md:text-sm tracking-[0.2em] opacity-80 uppercase">
+                Created by Xiaowei
+            </p>
+        </div>
+
+        <!-- Controls -->
+        <div class="p-6 mb-4 flex flex-col items-center gap-4 pointer-events-auto w-full">
+            <button id="toggle-mode-btn" class="btn-gold font-luxury font-bold py-3 px-10 rounded-sm text-sm md:text-base uppercase tracking-wider">
+                ASSEMBLE TREE
+            </button>
+
+            <div class="glass-panel p-2 rounded-lg flex items-center gap-3">
+                <button id="add-photo-btn" class="px-4 py-2 bg-[#004225] text-[#FFD700] border border-[#FFD700] rounded hover:bg-[#005c35] font-luxury text-xs md:text-sm transition-colors">
+                    + PHOTO
+                </button>
+                <span id="photo-count" class="text-[#FFD700] font-bold font-luxury text-sm">3 / 8</span>
+                <button id="remove-photo-btn" class="px-4 py-2 bg-[#8B0000] text-[#FFD700] border border-[#FFD700] rounded hover:bg-[#a00000] font-luxury text-xs md:text-sm transition-colors">
+                    - REMOVE
+                </button>
+            </div>
+            <input type="file" id="file-input" accept="image/*" style="display: none;">
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+        import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+        import { VignetteShader } from 'three/addons/shaders/VignetteShader.js';
+
+        // --- CONSTANTS ---
+        const CONFIG = {
+            colors: {
+                emerald: new THREE.Color('#004225'),
+                gold: new THREE.Color('#FFD700'),
+                red: new THREE.Color('#8B0000'),
+                silver: new THREE.Color('#E5E4E2')
+            },
+            tree: { height: 10, radius: 3.8, chaosRadius: 8, needleCount: 2500, ornamentCount: 80 },
+            // Changed to portrait 9:16 aspect ratio
+            photos: { max: 8, frameWidth: 0.9, frameHeight: 1.6 }
+        };
+
+        // --- STATE ---
+        const state = {
+            mode: 'CHAOS', // 'CHAOS' | 'FORMED'
+            progress: 0,   // 0 = CHAOS, 1 = FORMED
+            photos: [],    // Array of mesh objects
+            time: 0
+        };
+
+        // --- UTILS ---
+        const createPlaceholder = (text) => {
+            // 9:16 Aspect Ratio
+            const width = 450;
+            const height = 800;
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            
+            // Gradient
+            const gradient = ctx.createLinearGradient(0, 0, width, height);
+            gradient.addColorStop(0, '#002211');
+            gradient.addColorStop(1, '#004225');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+            
+            // Border
+            ctx.strokeStyle = '#FFD700';
+            ctx.lineWidth = 20;
+            ctx.strokeRect(0, 0, width, height);
+            
+            // Text
+            ctx.fillStyle = '#FFD700';
+            ctx.font = 'bold 60px serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, width / 2, height / 2);
+            return canvas.toDataURL();
+        };
+
+        const getRandomSpherePoint = (radius) => {
+            const u = Math.random();
+            const v = Math.random();
+            const theta = 2 * Math.PI * u;
+            const phi = Math.acos(2 * v - 1);
+            const r = Math.cbrt(Math.random()) * radius;
+            const sinPhi = Math.sin(phi);
+            return new THREE.Vector3(r * sinPhi * Math.cos(theta), r * sinPhi * Math.sin(theta), r * Math.cos(phi));
+        };
+
+        const getConePoint = (t, total, height, maxRadius, offset = 0) => {
+            const y = (t / total) * height - (height / 2);
+            const progress = 1 - (t / total);
+            const r = progress * maxRadius;
+            const angle = t * 0.5 + offset;
+            return new THREE.Vector3(r * Math.cos(angle), y + 1, r * Math.sin(angle));
+        };
+
+        // --- SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x001a0f, 0.02);
+        
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 2, 18);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limit DPR for mobile performance
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        container.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enablePan = false;
+        controls.minDistance = 8;
+        controls.maxDistance = 25;
+        controls.maxPolarAngle = Math.PI / 1.5;
+        controls.autoRotate = false;
+
+        // --- LIGHTING ---
+        const ambientLight = new THREE.AmbientLight(0x004225, 1.5);
+        scene.add(ambientLight);
+
+        const spotLight = new THREE.SpotLight(0xFFD700, 500);
+        spotLight.position.set(10, 20, 10);
+        spotLight.angle = 0.5;
+        spotLight.penumbra = 1;
+        spotLight.castShadow = true;
+        scene.add(spotLight);
+
+        // --- ENVIRONMENT (STARS) ---
+        const starGeo = new THREE.BufferGeometry();
+        const starCount = 2000;
+        const starPos = new Float32Array(starCount * 3);
+        for(let i=0; i<starCount*3; i++) starPos[i] = (Math.random() - 0.5) * 100;
+        starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+        const starMat = new THREE.PointsMaterial({color: 0xFFFFFF, size: 0.1, transparent: true, opacity: 0.8});
+        const stars = new THREE.Points(starGeo, starMat);
+        scene.add(stars);
+
+        // --- FOLIAGE SYSTEM ---
+        const foliageGeo = new THREE.BufferGeometry();
+        const positions = new Float32Array(CONFIG.tree.needleCount * 3);
+        const chaosPos = new Float32Array(CONFIG.tree.needleCount * 3);
+        const targetPos = new Float32Array(CONFIG.tree.needleCount * 3);
+
+        for (let i = 0; i < CONFIG.tree.needleCount; i++) {
+            // Chaos
+            const c = getRandomSpherePoint(CONFIG.tree.chaosRadius);
+            chaosPos[i*3] = c.x; chaosPos[i*3+1] = c.y; chaosPos[i*3+2] = c.z;
+            
+            // Target (Cone)
+            const h = Math.random() * CONFIG.tree.height;
+            const rMax = ((CONFIG.tree.height - h) / CONFIG.tree.height) * CONFIG.tree.radius;
+            const r = Math.sqrt(Math.random()) * rMax;
+            const theta = Math.random() * Math.PI * 2;
+            const y = h - CONFIG.tree.height / 2 + 1;
+            
+            targetPos[i*3] = r * Math.cos(theta);
+            targetPos[i*3+1] = y;
+            targetPos[i*3+2] = r * Math.sin(theta);
+
+            // Init at 0
+            positions[i*3] = 0; positions[i*3+1] = 0; positions[i*3+2] = 0;
+        }
+
+        foliageGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        foliageGeo.setAttribute('aChaos', new THREE.BufferAttribute(chaosPos, 3));
+        foliageGeo.setAttribute('aTarget', new THREE.BufferAttribute(targetPos, 3));
+
+        const foliageUniforms = {
+            uTime: { value: 0 },
+            uProgress: { value: 0 },
+            uColor1: { value: CONFIG.colors.emerald },
+            uColor2: { value: CONFIG.colors.gold }
+        };
+
+        const foliageMat = new THREE.ShaderMaterial({
+            uniforms: foliageUniforms,
+            vertexShader: `
+                uniform float uTime;
+                uniform float uProgress;
+                attribute vec3 aChaos;
+                attribute vec3 aTarget;
+                varying float vAlpha;
+                
+                // Cubic ease in/out
+                float ease(float t) { return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0; }
+
+                void main() {
+                    float t = ease(uProgress);
+                    vec3 pos = mix(aChaos, aTarget, t);
+                    // Wind
+                    pos.x += sin(uTime * 2.0 + pos.y) * 0.05 * uProgress;
+                    float sparkle = sin(uTime * 5.0 + pos.x * 10.0) * 0.5 + 0.5;
+                    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                    gl_PointSize = (6.0 * sparkle + 4.0) * (10.0 / -mvPosition.z);
+                    gl_Position = projectionMatrix * mvPosition;
+                    vAlpha = 0.8 + sparkle * 0.2;
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 uColor1;
+                uniform vec3 uColor2;
+                varying float vAlpha;
+                void main() {
+                    vec2 center = gl_PointCoord - 0.5;
+                    if (length(center) > 0.5) discard;
+                    vec3 color = mix(uColor1, uColor2, 1.0 - length(center) * 2.0);
+                    gl_FragColor = vec4(color, vAlpha);
+                }
+            `,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        const foliage = new THREE.Points(foliageGeo, foliageMat);
+        
+        // --- ORNAMENTS SYSTEM ---
+        const ornamentGeo = new THREE.SphereGeometry(0.15, 16, 16); // Base geometry
+        const ornamentMat = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.9 });
+        const ornaments = new THREE.InstancedMesh(ornamentGeo, ornamentMat, CONFIG.tree.ornamentCount);
+        
+        // Store ornament data for animation
+        const ornamentData = [];
+        const dummy = new THREE.Object3D();
+        const colors = [CONFIG.colors.red, CONFIG.colors.gold, CONFIG.colors.silver];
+
+        for (let i = 0; i < CONFIG.tree.ornamentCount; i++) {
+            const chaos = getRandomSpherePoint(CONFIG.tree.chaosRadius);
+            const target = getConePoint(i, CONFIG.tree.ornamentCount, CONFIG.tree.height, CONFIG.tree.radius, i * 0.5);
+            
+            const scale = Math.random() * 0.8 + 0.8; // 0.8 to 1.6
+            const color = colors[i % 3];
+            ornaments.setColorAt(i, color);
+            
+            ornamentData.push({
+                id: i,
+                chaos,
+                target,
+                scale,
+                speed: 0.5 + Math.random() * 0.5 // Different speeds
+            });
+            
+            // Initial Pos
+            dummy.position.copy(chaos);
+            dummy.updateMatrix();
+            ornaments.setMatrixAt(i, dummy.matrix);
+        }
+        ornaments.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        
+        // --- PHOTO SYSTEM ---
+        const photoGroup = new THREE.Group();
+        const photoSlots = [];
+        // Calculate slots
+        for(let i=0; i<CONFIG.photos.max; i++) {
+            const t = i / (CONFIG.photos.max - 1);
+            const y = THREE.MathUtils.lerp(-CONFIG.tree.height * 0.3, CONFIG.tree.height * 0.3, t);
+            const hTop = (CONFIG.tree.height / 2) - y;
+            const r = (hTop / CONFIG.tree.height) * (CONFIG.tree.radius * 1.1);
+            const angle = i * (Math.PI * 0.8);
+            const x = r * Math.cos(angle);
+            const z = r * Math.sin(angle);
+            photoSlots.push({
+                pos: new THREE.Vector3(x, y + 1.5, z),
+                rot: new THREE.Euler(0, -angle, 0)
+            });
+        }
+
+        // Texture loader
+        const textureLoader = new THREE.TextureLoader();
+        // Updated to use configured width/height
+        const photoFrameGeo = new THREE.BoxGeometry(CONFIG.photos.frameWidth, CONFIG.photos.frameHeight, 0.1);
+        
+        // Gold Frame Material: High metalness + Emissive to glow/shine
+        const goldMat = new THREE.MeshStandardMaterial({ 
+            color: CONFIG.colors.gold, 
+            metalness: 1.0, 
+            roughness: 0.15,
+            emissive: 0xaa7700, // Warm gold glow
+            emissiveIntensity: 0.4 
+        });
+
+        function addPhoto(url) {
+            if(state.photos.length >= CONFIG.photos.max) return;
+            
+            const index = state.photos.length;
+            const slot = photoSlots[index];
+            const chaosP = getRandomSpherePoint(CONFIG.tree.chaosRadius * 0.3);
+
+            // Material
+            const tex = textureLoader.load(url);
+            tex.colorSpace = THREE.SRGBColorSpace;
+            
+            // Photo Material:
+            // Use MeshBasicMaterial to preserve original colors.
+            // Set color to 0xbfbfbf (approx 0.75 intensity) to clamp max brightness below Bloom threshold (0.8).
+            const photoMat = new THREE.MeshBasicMaterial({ 
+                map: tex, 
+                color: 0xbfbfbf 
+            });
+            
+            // Apply materials: sides/back are gold, front is photo
+            const materials = [goldMat, goldMat, goldMat, goldMat, photoMat, goldMat];
+
+            const mesh = new THREE.Mesh(photoFrameGeo, materials);
+            mesh.userData = { 
+                isPhoto: true, 
+                index: index, 
+                chaosPos: chaosP, 
+                slotPos: slot.pos,
+                slotRot: slot.rot,
+                active: false 
+            };
+            
+            // Start at chaos
+            mesh.position.copy(chaosP);
+            
+            photoGroup.add(mesh);
+            state.photos.push(mesh);
+            updateUI();
+        }
+
+        function removePhoto() {
+            if(state.photos.length === 0) return;
+            const mesh = state.photos.pop();
+            photoGroup.remove(mesh);
+            // Dispose texture to free memory
+            if(mesh.material[4].map) mesh.material[4].map.dispose();
+            mesh.material[4].dispose();
+            updateUI();
+        }
+
+        // Main Tree Group holds everything that rotates
+        const treeGroup = new THREE.Group();
+        treeGroup.add(foliage);
+        treeGroup.add(ornaments);
+        treeGroup.add(photoGroup);
+        scene.add(treeGroup);
+
+        // --- POST PROCESSING ---
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.8);
+        composer.addPass(bloomPass);
+        
+        const vignettePass = new ShaderPass(VignetteShader);
+        vignettePass.uniforms["offset"].value = 0.95;
+        vignettePass.uniforms["darkness"].value = 1.6;
+        composer.addPass(vignettePass);
+        
+        const outputPass = new OutputPass();
+        composer.addPass(outputPass);
+
+        // --- INTERACTION ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('click', (event) => {
+            // Calculate mouse position
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(photoGroup.children);
+
+            if (intersects.length > 0) {
+                const mesh = intersects[0].object;
+                if(mesh.userData.isPhoto) {
+                    mesh.userData.active = !mesh.userData.active;
+                }
+            }
+        });
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            state.time += 0.01;
+
+            // Update Foliage Uniforms
+            foliageUniforms.uTime.value = state.time;
+            
+            // Lerp global progress
+            const targetProgress = state.mode === 'FORMED' ? 1.0 : 0.0;
+            state.progress = THREE.MathUtils.lerp(state.progress, targetProgress, 0.02);
+            foliageUniforms.uProgress.value = state.progress;
+
+            // Update Ornaments
+            const isFormed = state.mode === 'FORMED';
+            
+            for (let i = 0; i < CONFIG.tree.ornamentCount; i++) {
+                const d = ornamentData[i];
+                
+                // Calculate interpolation factor with "weight"
+                // Heavier items (simulated by speed) move differently
+                // We use global progress but apply a power curve based on 'speed'
+                // If progress is near 0 or 1, we snap, otherwise we ease
+                
+                let t = state.progress;
+                // Add some variation based on ID
+                const noise = Math.sin(state.time + d.id) * 0.02; 
+                
+                const pos = new THREE.Vector3().lerpVectors(d.chaos, d.target, t);
+                
+                dummy.position.copy(pos);
+                
+                // Rotation
+                dummy.rotation.set(
+                    t * Math.PI * 2 + d.id + state.time * 0.5, 
+                    t * Math.PI + d.id, 
+                    0
+                );
+                
+                // Scale (Pop in)
+                const s = d.scale * (0.8 + 0.2 * Math.sin(t * Math.PI));
+                dummy.scale.setScalar(s);
+                
+                dummy.updateMatrix();
+                ornaments.setMatrixAt(i, dummy.matrix);
+            }
+            ornaments.instanceMatrix.needsUpdate = true;
+
+            // Update Photos
+            state.photos.forEach(mesh => {
+                const ud = mesh.userData;
+                const targetPos = isFormed ? ud.slotPos : ud.chaosPos;
+                
+                // Position Lerp
+                mesh.position.lerp(targetPos, 0.05);
+                
+                // Rotation Lerp
+                if (isFormed) {
+                    mesh.rotation.x = THREE.MathUtils.lerp(mesh.rotation.x, ud.slotRot.x, 0.05);
+                    mesh.rotation.y = THREE.MathUtils.lerp(mesh.rotation.y, ud.slotRot.y, 0.05);
+                    mesh.rotation.z = THREE.MathUtils.lerp(mesh.rotation.z, ud.slotRot.z, 0.05);
+                } else {
+                    mesh.rotation.y += 0.005;
+                    mesh.rotation.x += 0.005;
+                }
+
+                // Scale Logic (Zoom)
+                const targetScale = ud.active ? 3.5 : 1.0;
+                const currentScale = mesh.scale.x;
+                const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1);
+                mesh.scale.setScalar(newScale);
+            });
+
+            // Tree Rotation
+            if (isFormed && state.progress > 0.9) {
+                treeGroup.rotation.y += 0.002;
+            }
+
+            // Render
+            composer.render();
+        }
+
+        // --- UI LOGIC ---
+        const modeBtn = document.getElementById('toggle-mode-btn');
+        modeBtn.addEventListener('click', () => {
+            state.mode = state.mode === 'CHAOS' ? 'FORMED' : 'CHAOS';
+            modeBtn.innerText = state.mode === 'CHAOS' ? 'ASSEMBLE TREE' : 'UNLEASH CHAOS';
+        });
+
+        const fileInput = document.getElementById('file-input');
+        document.getElementById('add-photo-btn').addEventListener('click', () => {
+            if(state.photos.length < CONFIG.photos.max) {
+                fileInput.click();
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if(file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    addPhoto(evt.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+            e.target.value = '';
+        });
+
+        document.getElementById('remove-photo-btn').addEventListener('click', removePhoto);
+
+        function updateUI() {
+            document.getElementById('photo-count').innerText = `${state.photos.length} / ${CONFIG.photos.max}`;
+        }
+
+        // --- INIT ---
+        // Add initial placeholders
+        addPhoto(createPlaceholder('FAMILY'));
+        addPhoto(createPlaceholder('FRIENDS'));
+        addPhoto(createPlaceholder('LOVE'));
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
