@@ -1,20 +1,81 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+## Project Overview
 
-# Run and deploy your AI Studio app
+This is a Three.js-based interactive Christmas tree visualization with luxury design elements. The project features:
+- A 3D Christmas tree with dynamic foliage and ornaments
+- Dual-state animation system (FORMED vs CHAOS modes)
+- Photo integration system allowing users to add personal photos to the tree
+- Cinematic bloom effects and post-processing
+- Responsive design with mobile support
 
-This contains everything you need to run your app locally.
+## Key Commands
 
-View your app in AI Studio: https://ai.studio/apps/drive/1OlpDYciWlnuvczrssmT_KAwA-jDU9rSU
+### Development
+- `npm install` - Install dependencies
+- `npm run dev` - Start development server on port 3000
+- `npm run build` - Build production version
+- `npm run preview` - Preview production build
 
-## Run Locally
+### Environment Setup
+1. Set the `GEMINI_API_KEY` in `.env.local` to your Gemini API key
 
-**Prerequisites:**  Node.js
+## Architecture
 
+### Core Technologies
+- Three.js (3D graphics library)
+- Vite (build tool)
+- TypeScript
+- Tailwind CSS (styling)
+- HTML/CSS/JavaScript
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### File Structure
+- `index.html` - Main HTML file containing all Three.js code and UI
+- `vite.config.ts` - Vite configuration
+- `package.json` - Dependencies and scripts
+- `tsconfig.json` - TypeScript configuration
+- `dist/single-file-build.html` - Production build output
+
+### Key Components
+
+1. **Tree System**
+   - Dynamic foliage using particle system with custom shaders
+   - Instanced ornaments with physics-based animations
+   - Animated ribbon/tinsel wrapped around the tree
+   - Golden star topper with rotation effects
+
+2. **Animation System**
+   - Dual-state transitions between FORMED (tree shape) and CHAOS (scattered particles)
+   - Smooth interpolation using lerp functions
+   - Custom easing functions for natural movement
+
+3. **Photo Integration**
+   - Up to 8 photos can be added to the tree
+   - Automatic positioning in predefined slots
+   - Click-to-zoom functionality
+   - Responsive sizing based on image aspect ratios
+
+4. **Visual Effects**
+   - Post-processing with UnrealBloomPass for glow effects
+   - Custom shaders for foliage rendering
+   - Dynamic lighting with multiple light sources
+   - Starfield background for depth
+
+### State Management
+The application uses a central state object to manage:
+- Current mode (FORMED/CHAOS)
+- Animation progress
+- Photo collection
+- Time-based animations
+
+### UI Components
+- Mode toggle button (UNLEASH CHAOS / ASSEMBLE TREE)
+- Photo management controls (+ PHOTO / - REMOVE)
+- File input for photo uploads
+- Photo counter display
+
+## Development Notes
+
+- All 3D logic is contained within the `<script type="module">` tag in index.html
+- The project uses ES modules for Three.js imports via CDN
+- Custom shaders are defined inline for foliage rendering
+- Physics-based animations use mathematical interpolation rather than external libraries
+- Mobile touch events are disabled via touch-action: none for better 3D control
