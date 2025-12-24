@@ -6,9 +6,9 @@
     <title>Grand Luxury Interactive Christmas Tree</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Great+Vibes&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
         
-        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #001a0f; touch-action: none; }
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background-color: #000000; touch-action: none; }
         #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 1; }
         
         /* Luxury Scrollbar */
@@ -17,6 +17,7 @@
         ::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 3px; }
 
         .font-luxury { font-family: 'Cinzel', serif; }
+        .font-artistic { font-family: 'Great Vibes', cursive; }
         .font-body { font-family: 'Playfair Display', serif; }
         .lux-shadow { text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
         
@@ -56,10 +57,10 @@
     <div class="ui-layer">
         <!-- Header -->
         <div class="p-6 flex flex-col items-center text-center mt-4 relative w-full pointer-events-auto">
-            <h1 class="text-4xl md:text-6xl text-[#FFD700] font-luxury drop-shadow-[0_0_10px_rgba(255,215,0,0.8)] mb-2">
-                CHRISTMAS TREES
+            <h1 class="text-6xl md:text-8xl text-[#FFD700] font-artistic drop-shadow-[0_0_15px_rgba(255,215,0,0.8)] mb-2" style="text-shadow: 0 0 20px #ff0000, 0 0 40px #FFD700;">
+                Merry Christmas
             </h1>
-            <p class="text-[#E5E4E2] font-body text-xs md:text-sm tracking-[0.2em] opacity-80 uppercase">
+            <p class="text-[#E5E4E2] font-body text-xs md:text-sm tracking-[0.2em] opacity-80 uppercase mt-2">
                 Created by Xiaowei
             </p>
         </div>
@@ -90,27 +91,27 @@
         import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
         import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
         import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-        import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-        import { VignetteShader } from 'three/addons/shaders/VignetteShader.js';
 
         // --- CONSTANTS ---
         const CONFIG = {
             colors: {
                 emerald: new THREE.Color('#004225'),
                 gold: new THREE.Color('#FFD700'),
-                red: new THREE.Color('#8B0000'),
-                silver: new THREE.Color('#E5E4E2')
+                red: new THREE.Color('#D40000'), 
+                silver: new THREE.Color('#E5E4E2'),
+                green: new THREE.Color('#006400'),
+                blue: new THREE.Color('#1E90FF'),
+                purple: new THREE.Color('#8A2BE2')
             },
-            tree: { height: 10, radius: 3.8, chaosRadius: 8, needleCount: 2500, ornamentCount: 80 },
-            // Vertical 9:16 aspect ratio settings
-            photos: { max: 8, frameWidth: 0.9, frameHeight: 1.6 }
+            tree: { height: 10, radius: 3.8, chaosRadius: 8, needleCount: 3000, ornamentCount: 120 },
+            photos: { max: 8 }
         };
 
         // --- STATE ---
         const state = {
             mode: 'FORMED', // Start in FORMED state
             progress: 1,    // Start fully formed
-            photos: [],    // Array of mesh objects
+            photos: [],    // Array of groups
             time: 0
         };
 
@@ -136,15 +137,20 @@
         // --- SCENE SETUP ---
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x001a0f, 0.02);
+        scene.background = new THREE.Color(0x000000); // Pure black background
+        scene.fog = new THREE.FogExp2(0x000000, 0.02); // Black fog
         
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
         camera.position.set(0, 2, 18);
 
         const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5)); // Limit DPR for mobile performance
-        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        
+        // ACESFilmicToneMapping for cinematic light
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.8; // Slightly darkened exposure
+        
         container.appendChild(renderer.domElement);
 
         const controls = new OrbitControls(camera, renderer.domElement);
@@ -155,15 +161,24 @@
         controls.autoRotate = false;
 
         // --- LIGHTING ---
-        const ambientLight = new THREE.AmbientLight(0x004225, 1.5);
+        const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.3);
         scene.add(ambientLight);
 
-        const spotLight = new THREE.SpotLight(0xFFD700, 500);
+        const spotLight = new THREE.SpotLight(0xFFD700, 1000); 
         spotLight.position.set(10, 20, 10);
         spotLight.angle = 0.5;
         spotLight.penumbra = 1;
         spotLight.castShadow = true;
         scene.add(spotLight);
+
+        // Point lights
+        const pointLight1 = new THREE.PointLight(0xFFFFFF, 20, 20);
+        pointLight1.position.set(5, 5, 5);
+        scene.add(pointLight1);
+        
+        const pointLight2 = new THREE.PointLight(0xFFFDD0, 20, 20);
+        pointLight2.position.set(-5, 2, -5);
+        scene.add(pointLight2);
 
         // --- ENVIRONMENT (STARS) ---
         const starGeo = new THREE.BufferGeometry();
@@ -171,9 +186,14 @@
         const starPos = new Float32Array(starCount * 3);
         for(let i=0; i<starCount*3; i++) starPos[i] = (Math.random() - 0.5) * 100;
         starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
-        const starMat = new THREE.PointsMaterial({color: 0xFFFFFF, size: 0.1, transparent: true, opacity: 0.8});
+        
+        const starMat = new THREE.PointsMaterial({color: 0x888888, size: 0.1, transparent: true, opacity: 0.3});
         const stars = new THREE.Points(starGeo, starMat);
         scene.add(stars);
+
+        // --- TREE COMPONENTS GROUP ---
+        const treeGroup = new THREE.Group();
+        scene.add(treeGroup);
 
         // --- FOLIAGE SYSTEM ---
         const foliageGeo = new THREE.BufferGeometry();
@@ -197,7 +217,6 @@
             targetPos[i*3+1] = y;
             targetPos[i*3+2] = r * Math.sin(theta);
 
-            // Init at 0
             positions[i*3] = 0; positions[i*3+1] = 0; positions[i*3+2] = 0;
         }
 
@@ -207,7 +226,7 @@
 
         const foliageUniforms = {
             uTime: { value: 0 },
-            uProgress: { value: 1.0 }, // Init at 1.0
+            uProgress: { value: 1.0 },
             uColor1: { value: CONFIG.colors.emerald },
             uColor2: { value: CONFIG.colors.gold }
         };
@@ -221,17 +240,18 @@
                 attribute vec3 aTarget;
                 varying float vAlpha;
                 
-                // Cubic ease in/out
                 float ease(float t) { return t < 0.5 ? 4.0 * t * t * t : 1.0 - pow(-2.0 * t + 2.0, 3.0) / 2.0; }
 
                 void main() {
                     float t = ease(uProgress);
                     vec3 pos = mix(aChaos, aTarget, t);
-                    // Wind
+                    // Gentle wind
                     pos.x += sin(uTime * 2.0 + pos.y) * 0.05 * uProgress;
-                    float sparkle = sin(uTime * 5.0 + pos.x * 10.0) * 0.5 + 0.5;
+                    float sparkle = sin(uTime * 3.0 + pos.x * 5.0) * 0.5 + 0.5;
                     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                    gl_PointSize = (6.0 * sparkle + 4.0) * (10.0 / -mvPosition.z);
+                    
+                    // Increased point size to avoid pixelated look on lights
+                    gl_PointSize = (8.0 * sparkle + 6.0) * (10.0 / -mvPosition.z);
                     gl_Position = projectionMatrix * mvPosition;
                     vAlpha = 0.8 + sparkle * 0.2;
                 }
@@ -243,8 +263,16 @@
                 void main() {
                     vec2 center = gl_PointCoord - 0.5;
                     if (length(center) > 0.5) discard;
-                    vec3 color = mix(uColor1, uColor2, 1.0 - length(center) * 2.0);
-                    gl_FragColor = vec4(color, vAlpha);
+                    
+                    // Soft glow
+                    float d = length(center) * 2.0;
+                    float glow = 1.0 - d;
+                    glow = pow(glow, 2.0); // Sharper falloff
+
+                    vec3 color = mix(uColor1, uColor2, 1.0 - d);
+                    if(d < 0.3) color = mix(color, vec3(1.0, 1.0, 0.8), 0.5);
+
+                    gl_FragColor = vec4(color, vAlpha * glow);
                 }
             `,
             transparent: true,
@@ -253,23 +281,34 @@
         });
 
         const foliage = new THREE.Points(foliageGeo, foliageMat);
+        treeGroup.add(foliage);
         
         // --- ORNAMENTS SYSTEM ---
-        const ornamentGeo = new THREE.SphereGeometry(0.15, 16, 16); // Base geometry
-        const ornamentMat = new THREE.MeshStandardMaterial({ roughness: 0.2, metalness: 0.9 });
+        const ornamentGeo = new THREE.SphereGeometry(0.18, 24, 24); 
+        const ornamentMat = new THREE.MeshStandardMaterial({ 
+            roughness: 0.2, 
+            metalness: 0.9,
+            envMapIntensity: 1.0
+        });
         const ornaments = new THREE.InstancedMesh(ornamentGeo, ornamentMat, CONFIG.tree.ornamentCount);
         
-        // Store ornament data for animation
         const ornamentData = [];
         const dummy = new THREE.Object3D();
-        const colors = [CONFIG.colors.red, CONFIG.colors.gold, CONFIG.colors.silver];
+        const availableColors = [
+            CONFIG.colors.red, 
+            CONFIG.colors.gold, 
+            CONFIG.colors.green, 
+            CONFIG.colors.blue, 
+            CONFIG.colors.purple,
+            CONFIG.colors.silver
+        ];
 
         for (let i = 0; i < CONFIG.tree.ornamentCount; i++) {
             const chaos = getRandomSpherePoint(CONFIG.tree.chaosRadius);
             const target = getConePoint(i, CONFIG.tree.ornamentCount, CONFIG.tree.height, CONFIG.tree.radius, i * 0.5);
             
-            const scale = Math.random() * 0.8 + 0.8; // 0.8 to 1.6
-            const color = colors[i % 3];
+            const scale = Math.random() * 0.8 + 0.8;
+            const color = availableColors[i % availableColors.length];
             ornaments.setColorAt(i, color);
             
             ornamentData.push({
@@ -277,20 +316,58 @@
                 chaos,
                 target,
                 scale,
-                speed: 0.5 + Math.random() * 0.5 // Different speeds
+                color: color
             });
             
-            // Initial Pos (Start formed)
             dummy.position.copy(target);
             dummy.updateMatrix();
             ornaments.setMatrixAt(i, dummy.matrix);
         }
         ornaments.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-        
+        treeGroup.add(ornaments);
+
+        // --- RIBBON (TINSEL) ---
+        const ribbonCurvePoints = [];
+        const ribbonLoops = 12; // Increased loops for better look
+        const ribbonHeight = CONFIG.tree.height;
+        for(let i=0; i<=200; i++) { // More points for smoothness
+            const t = i / 200;
+            const angle = t * Math.PI * 2 * ribbonLoops;
+            const y = (1 - t) * ribbonHeight - ribbonHeight/2 + 0.5;
+            const r = t * (CONFIG.tree.radius + 0.2); // Slightly outside tree
+            ribbonCurvePoints.push(new THREE.Vector3(Math.cos(angle)*r, y, Math.sin(angle)*r));
+        }
+        const ribbonCurve = new THREE.CatmullRomCurve3(ribbonCurvePoints);
+        // Thinner radius (0.02)
+        const ribbonGeo = new THREE.TubeGeometry(ribbonCurve, 200, 0.02, 8, false);
+        const ribbonMat = new THREE.MeshStandardMaterial({
+            color: 0xFFD700,
+            metalness: 0.9,
+            roughness: 0.3,
+            emissive: 0xaa7700,
+            emissiveIntensity: 0.2 // Reduced emissive to prevent blown out yellow
+        });
+        const ribbon = new THREE.Mesh(ribbonGeo, ribbonMat);
+        treeGroup.add(ribbon);
+
+        // --- TOP STAR ---
+        const starTopperGeo = new THREE.OctahedronGeometry(0.8, 0);
+        const starTopperMat = new THREE.MeshStandardMaterial({
+            color: 0xFFFDD0,
+            emissive: 0xFFFDD0,
+            emissiveIntensity: 1.0,
+            metalness: 0.5,
+            roughness: 0.0
+        });
+        const starTopper = new THREE.Mesh(starTopperGeo, starTopperMat);
+        starTopper.position.set(0, CONFIG.tree.height/2 + 0.8, 0);
+        treeGroup.add(starTopper);
+
         // --- PHOTO SYSTEM ---
-        const photoGroup = new THREE.Group();
+        const photoGroup = new THREE.Group(); // Photos are in scene root, not treeGroup
         const photoSlots = [];
-        // Calculate slots
+        
+        // Calculate slots (positions only)
         for(let i=0; i<CONFIG.photos.max; i++) {
             const t = i / (CONFIG.photos.max - 1);
             const y = THREE.MathUtils.lerp(-CONFIG.tree.height * 0.3, CONFIG.tree.height * 0.3, t);
@@ -301,79 +378,109 @@
             const z = r * Math.sin(angle);
             photoSlots.push({
                 pos: new THREE.Vector3(x, y + 1.5, z),
-                rot: new THREE.Euler(0, -angle, 0)
+                rot: new THREE.Euler(0, -angle, 0),
+                angleOffset: angle // Store original angle for slot tracking
             });
         }
 
-        // Texture loader
-        const textureLoader = new THREE.TextureLoader();
-        // Updated to use configured width/height (9:16)
-        const photoFrameGeo = new THREE.BoxGeometry(CONFIG.photos.frameWidth, CONFIG.photos.frameHeight, 0.1);
-        
-        // Gold Frame Material: High metalness + Emissive to glow/shine
+        // Gold Frame Material
         const goldMat = new THREE.MeshStandardMaterial({ 
             color: CONFIG.colors.gold, 
             metalness: 1.0, 
             roughness: 0.15,
-            emissive: 0xaa7700, // Warm gold glow
+            emissive: 0xaa7700, 
             emissiveIntensity: 0.4 
         });
 
         function addPhoto(url) {
             if(state.photos.length >= CONFIG.photos.max) return;
-            
-            const index = state.photos.length;
-            const slot = photoSlots[index];
-            const chaosP = getRandomSpherePoint(CONFIG.tree.chaosRadius * 0.3);
 
-            // Material
-            const tex = textureLoader.load(url);
-            tex.colorSpace = THREE.SRGBColorSpace;
-            
-            // Photo Material
-            const photoMat = new THREE.MeshBasicMaterial({ 
-                map: tex, 
-                color: 0xbfbfbf 
-            });
-            
-            // Apply materials: sides/back are gold, front is photo (index 4 for BoxGeometry if mapped correctly, but standard Box uses indices: right, left, top, bottom, front, back)
-            // Three.js BoxGeometry material indices: 0:right, 1:left, 2:top, 3:bottom, 4:front, 5:back
-            const materials = [goldMat, goldMat, goldMat, goldMat, photoMat, goldMat];
+            const img = new Image();
+            img.src = url;
+            img.onload = () => {
+                const index = state.photos.length;
+                const slot = photoSlots[index];
+                const chaosP = getRandomSpherePoint(CONFIG.tree.chaosRadius * 0.3);
 
-            const mesh = new THREE.Mesh(photoFrameGeo, materials);
-            mesh.userData = { 
-                isPhoto: true, 
-                index: index, 
-                chaosPos: chaosP, 
-                slotPos: slot.pos,
-                slotRot: slot.rot, // Base rotation relative to tree
-                active: false 
+                // Aspect Ratio Calculation
+                const aspect = img.width / img.height;
+                let imgW, imgH;
+
+                // Logic: constrain max dimension to avoid huge photos
+                if (aspect > 1) {
+                    // Landscape
+                    imgW = 1.8; 
+                    imgH = 1.8 / aspect;
+                } else {
+                    // Portrait or Square
+                    imgH = 1.6;
+                    imgW = 1.6 * aspect;
+                }
+
+                // Texture
+                const tex = new THREE.Texture(img);
+                tex.colorSpace = THREE.SRGBColorSpace;
+                tex.needsUpdate = true;
+                
+                // --- CREATE PHOTO OBJECT (Frame + Picture) ---
+                const group = new THREE.Group();
+
+                // 1. Frame Background (Gold Box)
+                const borderSize = 0.12;
+                const frameGeo = new THREE.BoxGeometry(imgW + borderSize, imgH + borderSize, 0.05);
+                const frameMesh = new THREE.Mesh(frameGeo, goldMat);
+                frameMesh.castShadow = true;
+                frameMesh.receiveShadow = true;
+                group.add(frameMesh);
+
+                // 2. Picture (Plane)
+                const photoGeo = new THREE.PlaneGeometry(imgW, imgH);
+                const photoMat = new THREE.MeshBasicMaterial({ 
+                    map: tex, 
+                    color: 0xffffff,
+                    side: THREE.FrontSide
+                });
+                const photoMesh = new THREE.Mesh(photoGeo, photoMat);
+                // Position slightly in front of frame to avoid z-fighting and give depth
+                photoMesh.position.z = 0.03; 
+                group.add(photoMesh);
+
+                group.userData = { 
+                    isPhoto: true, 
+                    index: index, 
+                    chaosPos: chaosP, 
+                    slotPos: slot.pos,
+                    angleOffset: slot.angleOffset,
+                    active: false,
+                    baseScale: new THREE.Vector3(1, 1, 1) // Geometry is intrinsically sized
+                };
+                
+                // Start formed
+                group.position.copy(slot.pos);
+                
+                photoGroup.add(group);
+                state.photos.push(group);
+                updateUI();
             };
-            
-            // Start at slot (FORMED)
-            mesh.position.copy(slot.pos);
-            
-            photoGroup.add(mesh);
-            state.photos.push(mesh);
-            updateUI();
         }
 
         function removePhoto() {
             if(state.photos.length === 0) return;
-            const mesh = state.photos.pop();
-            photoGroup.remove(mesh);
-            // Dispose texture to free memory
-            if(mesh.material[4].map) mesh.material[4].map.dispose();
-            mesh.material[4].dispose();
+            const group = state.photos.pop();
+            photoGroup.remove(group);
+            
+            // Cleanup
+            group.children.forEach(child => {
+                if(child.geometry) child.geometry.dispose();
+                if(child.material) {
+                    if(child.material.map) child.material.map.dispose();
+                    child.material.dispose();
+                }
+            });
+
             updateUI();
         }
 
-        // Main Tree Group holds foliage and ornaments (rotates continuously)
-        const treeGroup = new THREE.Group();
-        treeGroup.add(foliage);
-        treeGroup.add(ornaments);
-        scene.add(treeGroup);
-        // Add Photos directly to scene to handle their rotation independently
         scene.add(photoGroup);
 
         // --- POST PROCESSING ---
@@ -381,13 +488,9 @@
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
-        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.8);
+        // Toned down Bloom
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.4, 0.2, 0.85);
         composer.addPass(bloomPass);
-        
-        const vignettePass = new ShaderPass(VignetteShader);
-        vignettePass.uniforms["offset"].value = 0.95;
-        vignettePass.uniforms["darkness"].value = 1.6;
-        composer.addPass(vignettePass);
         
         const outputPass = new OutputPass();
         composer.addPass(outputPass);
@@ -397,114 +500,101 @@
         const mouse = new THREE.Vector2();
 
         window.addEventListener('click', (event) => {
-            // Calculate mouse position
             mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
             mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
             raycaster.setFromCamera(mouse, camera);
-            const intersects = raycaster.intersectObjects(photoGroup.children);
-
+            
+            // Recursive intersect to hit children meshes in Groups
+            const intersects = raycaster.intersectObjects(photoGroup.children, true);
+            
             if (intersects.length > 0) {
-                const mesh = intersects[0].object;
-                if(mesh.userData.isPhoto) {
-                    mesh.userData.active = !mesh.userData.active;
+                // Traverse up to find the group with userData
+                let target = intersects[0].object;
+                while(target && !target.userData.isPhoto && target.parent) {
+                    target = target.parent;
+                }
+                
+                if(target && target.userData.isPhoto) {
+                    target.userData.active = !target.userData.active;
                 }
             }
         });
 
-        // --- HELPERS FOR ROTATION ---
-        const dummyObj = new THREE.Object3D();
-        const Y_AXIS = new THREE.Vector3(0, 1, 0);
-        const qRigid = new THREE.Quaternion();
-        const qBillboard = new THREE.Quaternion();
-
         // --- ANIMATION LOOP ---
+        const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
         function animate() {
             requestAnimationFrame(animate);
             state.time += 0.01;
 
-            // Update Foliage Uniforms
             foliageUniforms.uTime.value = state.time;
             
-            // Lerp global progress
             const targetProgress = state.mode === 'FORMED' ? 1.0 : 0.0;
             state.progress = THREE.MathUtils.lerp(state.progress, targetProgress, 0.02);
             foliageUniforms.uProgress.value = state.progress;
 
-            // Always rotate the tree core (foliage/ornaments)
-            treeGroup.rotation.y += 0.002;
-
-            // Update Ornaments (move between chaos and target relative to treeGroup)
-            // Since ornaments are children of treeGroup, their "Target" is local.
-            const isFormed = state.mode === 'FORMED';
+            // Rotate Tree
+            treeGroup.rotation.y += 0.003;
             
+            // Rotate Star
+            starTopper.rotation.y -= 0.01;
+            starTopper.rotation.z = Math.sin(state.time) * 0.1;
+
+            // Update Ornaments Color & Pos
+            const isFormed = state.mode === 'FORMED';
+
             for (let i = 0; i < CONFIG.tree.ornamentCount; i++) {
                 const d = ornamentData[i];
                 let t = state.progress;
-                
-                // Interpolate position relative to tree center
                 const pos = new THREE.Vector3().lerpVectors(d.chaos, d.target, t);
                 dummy.position.copy(pos);
+                dummy.rotation.set(t * Math.PI * 2 + d.id, t * Math.PI + d.id, 0);
                 
-                // Rotation
-                dummy.rotation.set(
-                    t * Math.PI * 2 + d.id + state.time * 0.5, 
-                    t * Math.PI + d.id, 
-                    0
-                );
-                
-                // Scale (Pop in)
                 const s = d.scale * (0.8 + 0.2 * Math.sin(t * Math.PI));
                 dummy.scale.setScalar(s);
-                
                 dummy.updateMatrix();
+                
                 ornaments.setMatrixAt(i, dummy.matrix);
             }
             ornaments.instanceMatrix.needsUpdate = true;
+            if(ornaments.instanceColor) ornaments.instanceColor.needsUpdate = true;
 
             // Update Photos
-            // Determine mix factor for rotation: 1.0 = Pure Billboard (Chaos), 0.7 = Hybrid (Formed)
-            const billboardFactor = THREE.MathUtils.lerp(1.0, 0.7, state.progress);
-
-            state.photos.forEach(mesh => {
-                const ud = mesh.userData;
+            state.photos.forEach(group => {
+                const ud = group.userData;
                 
-                // Calculate Target Position
-                // Chaos: Static chaos position
-                // Formed: Orbiting slot position
-                
-                // 1. Calculate Orbiting Slot Position in World Space
+                // 1. Calculate Position
                 const rigidPos = ud.slotPos.clone().applyAxisAngle(Y_AXIS, treeGroup.rotation.y);
-                
-                // 2. Lerp Position
                 const targetPos = new THREE.Vector3().lerpVectors(ud.chaosPos, rigidPos, state.progress);
+                group.position.lerp(targetPos, 0.05);
                 
-                // Apply Position
-                mesh.position.lerp(targetPos, 0.05);
+                // 2. Rotation Logic (Face Screen + Tilt)
+                group.lookAt(camera.position);
                 
-                // Calculate Target Rotation
-                
-                // A. Billboard Rotation (Always face camera)
-                dummyObj.position.copy(mesh.position);
-                dummyObj.lookAt(camera.position);
-                qBillboard.copy(dummyObj.quaternion);
+                const screenPos = group.position.clone().project(camera);
+                const tiltAmount = screenPos.x * 0.6; 
+                group.rotateY(tiltAmount);
 
-                // B. Rigid Rotation (Face outward from tree center)
-                // Rigid World Rot = TreeRot * SlotBaseRot
-                qRigid.setFromEuler(ud.slotRot);
-                qRigid.premultiply(treeGroup.quaternion); // Apply tree rotation
-                
-                // C. Final Rotation (Slerp)
-                mesh.quaternion.slerpQuaternions(qRigid, qBillboard, billboardFactor);
+                // 3. Scale Logic
+                let sX = ud.baseScale.x;
+                let sY = ud.baseScale.y;
+                let sZ = ud.baseScale.z;
 
-                // Scale Logic (Zoom)
-                const targetScale = ud.active ? 3.5 : 1.0;
-                const currentScale = mesh.scale.x;
-                const newScale = THREE.MathUtils.lerp(currentScale, targetScale, 0.1);
-                mesh.scale.setScalar(newScale);
+                if (ud.active) {
+                    const zoomFactor = 2.5; // Zoom in
+                    sX *= zoomFactor; sY *= zoomFactor; sZ *= zoomFactor;
+                } else if (state.mode === 'CHAOS') {
+                    const chaosFactor = 1.2;
+                    sX *= chaosFactor; sY *= chaosFactor; sZ *= chaosFactor;
+                }
+
+                group.scale.lerp(new THREE.Vector3(sX, sY, sZ), 0.1);
             });
 
-            // Render
+            // Ribbon visibility fade
+            ribbonMat.opacity = state.progress;
+            ribbonMat.transparent = true;
+
             composer.render();
         }
 
@@ -541,8 +631,6 @@
         }
 
         // --- INIT ---
-        
-        // Handle Resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
